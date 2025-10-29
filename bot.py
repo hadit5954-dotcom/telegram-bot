@@ -1,60 +1,17 @@
-import os
-import threading
-from flask import Flask
 import telebot
-import sqlite3
+import os
+from flask import Flask, request
 
-# ایجاد سرور وب برای نگه‌داری آنلاین
+# توکن ربات
+bot = telebot.TeleBot("8348534439:AAEwFZjAxvQ7FjF7RVgJsWuLfCYrIV8J3_I")
 app = Flask(__name__)
 
-@app.route('/')
-def home():
-    return "🤖 Bot is running!"
-
-def run_web():
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
-
-# اجرای سرور وب در ترد جداگانه
-web_thread = threading.Thread(target=run_web)
-web_thread.daemon = True
-web_thread.start()
-
-# بقیه کد ربات...
-bot = telebot.TeleBot("8348534439:AAEwFZjAxvQ7FjF7RVgJsWuLfCYrIV8J3_I")
-
+# کیبورد اصلی
 keyboard1 = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
 keyboard1.add("ارتباط گرفتن با من", "رزومه", "پروژه ها")
 
-def init_db():
-    conn = sqlite3.connect('bot.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER UNIQUE,
-            name TEXT,
-            username TEXT
-        )
-    ''')
-    conn.commit()
-    conn.close()
-
 @bot.message_handler(commands=["start"])
 def hi(message):
-    user = message.from_user
-    print(f"کاربر جدید: {user.first_name}")
-    
-    try:
-        conn = sqlite3.connect('bot.db')
-        cursor = conn.cursor()
-        cursor.execute("SELECT id FROM users WHERE user_id = ?", (user.id,))
-        if not cursor.fetchone():
-            cursor.execute("INSERT INTO users (user_id, name, username) VALUES (?, ?, ?)", (user.id, user.first_name, user.username))
-            conn.commit()
-        conn.close()
-    except Exception as e:
-        print(f"خطا: {e}")
-    
     bot.send_message(message.chat.id, "سلام من محمد هادی ترابی هستم👋", reply_markup=keyboard1)
 
 @bot.message_handler(func=lambda message: True)
@@ -100,7 +57,31 @@ def keyboard(message):
     elif message.text == "بازگشت":
         bot.send_message(message.chat.id, "به منوی اصلی بازگشتی 👇", reply_markup=keyboard1)
 
-init_db()
-print("ربات اجرا شد!")
-bot.infinity_polling()
+@app.route('/')
+def home():
+    return "🤖 Bot is running!"
 
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    if request.headers.get('content-type') == 'application/json':
+        json_string = request.get_data().decode('utf-8')
+        update = telebot.types.Update.de_json(json_string)
+        bot.process_new_updates([update])
+        return ''
+    else:
+        return 'Invalid content type', 403
+
+if __name__ == '__main__':
+    # حذف هرگونه webhook قبلی
+    bot.remove_webhook()
+    
+    # تنظیم webhook جدید
+    webhook_url = f"https://{os.environ.get('RENDER_EXTERNAL_URL', '')}/webhook"
+    if webhook_url.startswith('https://'):
+        bot.set_webhook(url=webhook_url)
+        print(f"✅ Webhook set to: {webhook_url}")
+    
+    # اجرای سرور
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
+    print("🤖 ربات با webhook اجرا شد!")
