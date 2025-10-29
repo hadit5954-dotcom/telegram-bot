@@ -1,6 +1,25 @@
+import os
+import threading
+from flask import Flask
 import telebot
 import sqlite3
 
+# ایجاد سرور وب برای نگه‌داری آنلاین
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "🤖 Bot is running!"
+
+def run_web():
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+
+# اجرای سرور وب در ترد جداگانه
+web_thread = threading.Thread(target=run_web)
+web_thread.daemon = True
+web_thread.start()
+
+# بقیه کد ربات...
 bot = telebot.TeleBot("8348534439:AAEwFZjAxvQ7FjF7RVgJsWuLfCYrIV8J3_I")
 
 keyboard1 = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
@@ -29,16 +48,9 @@ def hi(message):
         conn = sqlite3.connect('bot.db')
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM users WHERE user_id = ?", (user.id,))
-        existing_user = cursor.fetchone()
-        
-        if not existing_user:
-            cursor.execute(
-                "INSERT INTO users (user_id, name, username) VALUES (?, ?, ?)",
-                (user.id, user.first_name, user.username)
-            )
+        if not cursor.fetchone():
+            cursor.execute("INSERT INTO users (user_id, name, username) VALUES (?, ?, ?)", (user.id, user.first_name, user.username))
             conn.commit()
-            print("کاربر جدید ذخیره شد")
-        
         conn.close()
     except Exception as e:
         print(f"خطا: {e}")
@@ -91,3 +103,4 @@ def keyboard(message):
 init_db()
 print("ربات اجرا شد!")
 bot.infinity_polling()
+
